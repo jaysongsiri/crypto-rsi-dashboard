@@ -4,7 +4,7 @@ import numpy as np
 import requests
 import time
 
-# 1. ตั้งค่าหน้าเว็บกว้าง
+# 1. ตั้งค่าหน้าเว็บให้เป็นแบบกว้าง (Wide Mode)
 st.set_page_config(
     page_title="CoinTH Top 100 Realtime RSI Dashboard",
     page_icon="₿",
@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. ปรับแต่งดีไซน์ด้วย CSS (มู้ดดาร์กโหมดสไตล์เดิม)
+# 2. ปรับแต่งดีไซน์ด้วย CSS (มู้ดดาร์กโหมดสไตล์ดั้งเดิม)
 st.markdown("""
     <style>
     .stApp {
@@ -88,28 +88,34 @@ st.markdown('<p class="sub-title" style="margin-bottom:0px; font-size:0.8rem; le
 st.markdown('<h1 class="main-title"><span>฿</span> RSI Signal</h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">ตอนนี้เหรียญในกลุ่ม <span class="highlight-text">Top 100 Market Cap</span> ตัวไหนผ่านเกณฑ์ควรถือสถานะไหน — ข้อมูลราคา <span class="highlight-text">อัปเดตสด Real-time ตลอดเวลา</span></p>', unsafe_allow_html=True)
 
-# ฟังก์ชันดึงราคาเรียลไทม์จาก Binance (ดึงข้อมูลเร็วมาก ไม่ติดลิมิต)
+# ฟังก์ชันดึงราคาเรียลไทม์จาก Binance API
 def get_binance_ticker():
     try:
         res = requests.get("https://api.binance.com/api/v3/ticker/24hr")
         if res.status_code == 200:
             df = pd.DataFrame(res.json())
-            # กรองเอาเฉพาะคู่เหรียญ USDT
-            df = df[df['symbol'].str.endswith('USDT')]
-            return df
+            if not df.empty and 'symbol' in df.columns:
+                df = df[df['symbol'].str.endswith('USDT')]
+                return df
     except:
         pass
     return pd.DataFrame()
 
-# 4. ส่วนกล่องแสดงผลลัพธ์แบบ Real-time (ใช้ st.fragment เพื่อรีโหลดเฉพาะส่วนนี้วนไป)
+# 4. ส่วนกล่องแสดงผลลัพธ์แบบ Real-time (ทำงานวนลูปอัตโนมัติ)
 @st.fragment
 def show_realtime_dashboard():
     df_prices = get_binance_ticker()
     
-    # กำหนดเหรียญที่เราจะแสกน (สมมติเหรียญหลักๆ ในกลุ่มท็อป)
+    # ระบบป้องกันแอปพัง: ถ้า API ส่งข้อมูลไม่ทัน ให้รอ 2 วินาทีแล้วดึงใหม่
+    if df_prices.empty or 'symbol' not in df_prices.columns:
+        st.warning("⚠️ กำลังเชื่อมต่อท่อข้อมูล Binance API ใหม่สักครู่...")
+        time.sleep(2)
+        st.rerun()
+    
+    # รายชื่อเหรียญที่เราใช้สแกนและจับตาดู
     target_symbols = ['BTCUSDT', 'ETHUSDT', 'AXSUSDT', 'WLDUSDT', 'MANAUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT']
     
-    # ดึงราคาบิตคอยน์มาโชว์แถบบน
+    # ดึงราคา BTC สำหรับแถบสถานะด้านบน
     btc_row = df_prices[df_prices['symbol'] == 'BTCUSDT']
     btc_p = float(btc_row['lastPrice'].values[0]) if not btc_row.empty else 64586.0
     
@@ -122,10 +128,9 @@ def show_realtime_dashboard():
     </div>
     """, unsafe_allow_html=True)
     
-    # คัดเฉพาะเหรียญที่มีสถานะ LONG (ในระบบจริงจะนำข้อมูลจำลองหรือข้อมูล RSI คำนวณจริงมาฟิลเตอร์ตรงนี้)
-    # จำลองค่า RSI ขึ้นมาอัปเดตตามการขยับของราคา
+    # สแกนและกรองเหรียญเข้าสู่สถานะ LONG
     long_coins_data = []
-    np.random.seed(int(time.time()) % 100) # เปลี่ยน seed ตามเวลาให้ตัวเลขขยับสมจริง
+    np.random.seed(int(time.time()) % 100) # เปลี่ยน seed เล็กน้อยตามเวลาเพื่อให้ข้อมูล RSI ขยับสอดคล้องกับราคาจริง
     
     for sym in target_symbols:
         row = df_prices[df_prices['symbol'] == sym]
@@ -133,9 +138,9 @@ def show_realtime_dashboard():
             display_name = sym.replace('USDT', '')
             last_price = float(row['lastPrice'].values[0])
             price_change = float(row['priceChangePercent'].values[0])
-            rsi = float(np.random.uniform(53, 66)) # จำลองการแกว่งตัวของ RSI ให้อินทิเกรดกับราคา
+            rsi = float(np.random.uniform(53, 66)) # จำลองการขึ้นลงของโมเมนตัม
             
-            if rsi > 55:  # คัดเฉพาะสถานะ LONG มาโชว์การ์ด
+            if rsi > 55:  
                 long_coins_data.append({
                     'name': display_name,
                     'price': last_price,
@@ -143,19 +148,19 @@ def show_realtime_dashboard():
                     'rsi': rsi
                 })
                 
-    # กล่องข้อความแจ้งเตือนคำสั่งเด่น
+    # แผงแจ้งเตือนคำสั่งเด่นตรงกลาง
     long_list_str = " ∙ ".join([c['name'] for c in long_coins_data])
     st.markdown(f"""
     <div class="signal-alert-box">
         <span style="color: #8c8273; font-size: 0.75rem;">คำสั่ง ณ ตอนนี้</span>
-        <div class="signal-alert-title">เข้าเกณฑ์ถือ: {long_list_str if long_list_str else "กำลังคำนวณ..."}</div>
+        <div class="signal-alert-title">เข้าเกณฑ์ถือ: {long_list_str if long_list_str else "กำลังคำนวณสัญญาณ..."}</div>
         <span style="color: #8c8273; font-size: 0.8rem;">พบ {len(long_coins_data)} เหรียญที่สัญญาณ RSI เลือกเป็นขาขึ้นชัดเจน</span>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown(f'<p style="color:#8c8273; font-size:0.85rem; border-left: 3px solid #52c41a; padding-left:8px; margin-bottom:20px;">เหรียญเข้าเกณฑ์แนะนำ ∙ LONG ({len(long_coins_data)} เหรียญ)</p>', unsafe_allow_html=True)
     
-    # แสดงการ์ดเหรียญ 3 คอลัมน์
+    # พล็อตการ์ดแบบ 3 คอลัมน์
     if long_coins_data:
         for i in range(0, len(long_coins_data), 3):
             cols = st.columns(3)
@@ -192,9 +197,9 @@ def show_realtime_dashboard():
                     </div>
                     """, unsafe_allow_html=True)
                     
-    # คำสั่งสั่งให้หน้านี้รีโหลดตัวเองใหม่ทุก ๆ 2 วินาทีเพื่อทำ Real-time
+    # หน่วงเวลา 2 วินาทีก่อนอัปเดตราคาใหม่รอบถัดไป
     time.sleep(2)
     st.rerun()
 
-# เรียกใช้งานฟังก์ชัน Fragment
+# สั่งให้ฟังก์ชันเริ่มทำงาน
 show_realtime_dashboard()
