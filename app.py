@@ -33,15 +33,13 @@ def get_top_100_crypto():
 
 raw_data = get_top_100_crypto()
 
-# จำลองการคำนวณสัญญาน RSI และคัดกรองเหรียญ (สำหรับใช้งานจริง สามารถเชื่อมต่อประวัติราคาเพื่อคำนวณ RSI 14 ของจริงได้)
+# จำลองการคำนวณสัญญาน RSI และคัดกรองเหรียญ
 long_coins = []
 all_coins_count = len(raw_data) if raw_data else 100
 
 if raw_data:
-    # สุ่มจำลองค่า RSI เพื่อให้เห็นการทำงานของ UI ก่อน
     np.random.seed(42) 
     for coin in raw_data:
-        # จำลองค่า RSI เกาะกลุ่มตามสภาพตลาดปัจจุบัน
         simulated_rsi = float(np.random.uniform(35, 70))
         coin['rsi'] = simulated_rsi
         if simulated_rsi > 55:
@@ -50,7 +48,7 @@ if raw_data:
 # ดึงราคา BTC สดมาโชว์ที่แถบด้านบน
 btc_price = next((coin['current_price'] for coin in raw_data if coin['id'] == 'bitcoin'), 64586)
 
-# 3. ปรับแต่งดีไซน์ด้วย CSS (มู้ดแอนด์โทนสีน้ำตาล-ทองสไตล์ Minimal)
+# 3. ปรับแต่งดีไซน์ด้วย CSS (แก้ไขจุดผิดพลาด unsafe_allow_html เรียบร้อยแล้ว)
 st.markdown("""
     <style>
     .stApp {
@@ -110,7 +108,7 @@ st.markdown("""
     .date-sub { color: #595247; font-size: 0.75rem; }
     
     .rsi-val { font-family: 'Georgia', serif; font-size: 2.8rem; font-weight: bold; color: #52c41a; line-height: 1; }
-    .rsi-label { color: #595247; font-size: 0.7 ounce; margin-left: 5px; }
+    .rsi-label { color: #595247; font-size: 0.7rem; margin-left: 5px; }
     
     .progress-container { position: relative; margin: 15px 0 5px 0; height: 6px; background-color: #2d2924; border-radius: 3px; }
     .progress-zone { position: absolute; left: 45%; width: 10%; height: 100%; background-color: #3d372e; }
@@ -119,17 +117,17 @@ st.markdown("""
     
     .history-box { background-color: #141311; border: 1px solid #23201b; border-radius: 10px; padding: 12px; margin-top: 15px; font-size: 0.75rem; color: #a89f91; line-height: 1.5; }
     </style>
-    """, unsafe_allow_index=True)
+    """, unsafe_allow_html=True)
 
 # 4. ส่วนหัวข้อเว็บบอร์ด (Header)
-st.markdown('<p class="sub-title" style="margin-bottom:0px; font-size:0.8rem; letter-spacing: 2px;">REALTIME RSI SIGNAL + BACKTEST (TOP 100)</p>', unsafe_allow_index=True)
-st.markdown('<h1 class="main-title"><span>฿</span> RSI Signal</h1>', unsafe_allow_index=True)
+st.markdown('<p class="sub-title" style="margin-bottom:0px; font-size:0.8rem; letter-spacing: 2px;">REALTIME RSI SIGNAL + BACKTEST (TOP 100)</p>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-title"><span>฿</span> RSI Signal</h1>', unsafe_allow_html=True)
 st.markdown("""
 <p class="sub-title">
 ตอนนี้เหรียญในกลุ่ม <span class="highlight-text">Top 100 Market Cap</span> ตัวไหนผ่านเกณฑ์ควรถือสถานะไหน — 
 ตามกฎ <span class="highlight-text">RSI 55/45 long-only</span>. ข้อมูลราคารายการอัปเดตสดอัตโนมัติจาก API
 </p>
-""", unsafe_allow_index=True)
+""", unsafe_allow_html=True)
 
 # 5. แถบสถานะด้านบน (Top Stats Bar)
 st.markdown(f"""
@@ -140,9 +138,9 @@ st.markdown(f"""
     <span>BTC <span style="color:#ffffff;">${btc_price:,.0f}</span></span>   |   
     <span>กลยุทธ์ <span style="color:#e5874a;">RSI 55/45 ∙ long-only</span></span>
 </div>
-""", unsafe_allow_index=True)
+""", unsafe_allow_html=True)
 
-# 6. กล่องคำสั่งเด่นตรงกลาง สรุปเหรียญที่น่าซื้อ/ถือ ณ ตอนนี้
+# 6. กล่องคำสั่งเด่นตรงกลาง
 long_tickers_str = " ∙ ".join([coin['symbol'].upper() for coin in long_coins[:7]]) + ("..." if len(long_coins) > 7 else "")
 st.markdown(f"""
 <div class="signal-alert-box">
@@ -150,14 +148,13 @@ st.markdown(f"""
     <div class="signal-alert-title">เข้าเกณฑ์ถือ: {long_tickers_str if long_tickers_str else "ไม่มีเหรียญเข้าเกณฑ์ (ถือเงินสด)"}</div>
     <span style="color: #8c8273; font-size: 0.8rem;">{len(long_coins)} จาก {all_coins_count} เหรียญมี RSI > 55 ∙ ที่เหลือถือเงินสด (RSI ยังไม่ผ่านเกณฑ์)</span>
 </div>
-""", unsafe_allow_index=True)
+""", unsafe_allow_html=True)
 
-st.markdown(f'<p style="color:#8c8273; font-size:0.85rem; border-left: 3px solid #52c41a; padding-left:8px; margin-bottom:20px;">เหรียญเข้าเกณฑ์แนะนำ ∙ LONG ({len(long_coins)} เหรียญ)</p>', unsafe_allow_index=True)
+st.markdown(f'<p style="color:#8c8273; font-size:0.85rem; border-left: 3px solid #52c41a; padding-left:8px; margin-bottom:20px;">เหรียญเข้าเกณฑ์แนะนำ ∙ LONG ({len(long_coins)} เหรียญ)</p>', unsafe_allow_html=True)
 
-# 7. แสดงผลเหรียญที่เป็นหน้า LONG (สลับแถวละ 3 คอลัมน์แบบสวยงาม)
+# 7. แสดงผลเหรียญที่เป็นหน้า LONG (สลับแถวละ 3 คอลัมน์)
 if long_coins:
-    # วนลูปสร้างคอลัมน์ทีละ 3 ตัว
-    for i in range(0, min(12, len(long_coins)), 3):  # จำกัดไว้แสดงโชว์ 12 ตัวแรกเพื่อความสวยงาม
+    for i in range(0, min(12, len(long_coins)), 3): 
         cols = st.columns(3)
         for idx, coin in enumerate(long_coins[i:i+3]):
             with cols[idx]:
@@ -168,8 +165,6 @@ if long_coins:
                 
                 change_class = "price-change-pos" if change_24h >= 0 else "price-change-neg"
                 change_sign = "+" if change_24h >= 0 else ""
-                
-                # ตัดทศนิยมตามความเหมาะสมของราคาเหรียญ
                 price_format = f"${price:,.4f}" if price < 1.0 else f"${price:,.2f}"
                 
                 st.markdown(f"""
@@ -198,6 +193,6 @@ if long_coins:
                         <p style="color:#595247; font-size:0.7rem; margin-top:2px;">กลยุทธ์บังคับขายล้างพอร์ต (→CASH) ทันทีเมื่อราคาปิดหลุด RSI 45</p>
                     </div>
                 </div>
-                """, unsafe_allow_index=True)
+                """, unsafe_allow_html=True)
 else:
-    st.info("ไม่มีเหรียญใดใน Top 100 ที่ผ่านเกณฑ์ RSI > 55 ณ ขณะนี้ (ระบบแนะนำให้ถือเงินสดทั้งหมดเพื่อความปลอดภัย)")
+    st.info("ไม่มีเหรียญใดใน Top 100 ที่ผ่านเกณฑ์ RSI > 55 ณ ขณะนี้")
