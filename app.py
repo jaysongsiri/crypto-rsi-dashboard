@@ -1,15 +1,15 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-# 1. ตั้งค่าหน้าเว็บให้เป็นแบบกว้าง (Wide Mode)
+# 1. ตั้งค่าหน้าเว็บกว้าง (Wide Mode)
 st.set_page_config(
-    page_title="CoinTH Realtime RSI Dashboard",
+    page_title="CoinTH Top 100 RSI Dashboard",
     page_icon="₿",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# 2. ปรับแต่งดีไซน์ด้วย CSS (มู้ดดาร์กโหมดสไตล์ดั้งเดิม)
+# 2. ปรับแต่งดีไซน์ดาร์กโหมดสไตล์ดั้งเดิมของคุณ
 st.markdown("""
     <style>
     .stApp {
@@ -36,9 +36,6 @@ st.markdown("""
         font-size: 0.85rem;
         color: #8c8273;
         margin-bottom: 25px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 15px;
     }
     
     .signal-alert-box {
@@ -50,101 +47,85 @@ st.markdown("""
     }
     .signal-alert-title { font-size: 1.8rem; font-weight: bold; color: #e5874a; margin-bottom: 5px; }
     
-    .widget-container {
+    .section-title-long {
+        color: #52c41a;
+        font-size: 1.2rem;
+        font-weight: bold;
+        border-left: 4px solid #52c41a;
+        padding-left: 10px;
+        margin-top: 20px;
+        margin-bottom: 15px;
+    }
+    .section-title-cash {
+        color: #f76c6c;
+        font-size: 1.2rem;
+        font-weight: bold;
+        border-left: 4px solid #f76c6c;
+        padding-left: 10px;
+        margin-top: 40px;
+        margin-bottom: 15px;
+    }
+    .widget-wrapper {
         background-color: #1b1916;
         border: 1px solid #2d2924;
         border-radius: 16px;
-        padding: 15px;
+        padding: 10px;
         margin-bottom: 20px;
     }
-    .coin-header-title {
-        font-size: 1.4rem;
-        font-weight: bold;
-        color: #ffffff;
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .status-badge {
-        background-color: #102a1d;
-        color: #52c41a;
-        border: 1px solid #1f4d36;
-        font-size: 0.75rem;
-        padding: 2px 10px;
-        border-radius: 6px;
-        font-weight: bold;
-    }
-    .live-badge { background-color: #2d2924; color: #52c41a; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. ส่วนหัวข้อเว็บบอร์ด (Static Header)
-st.markdown('<p class="sub-title" style="margin-bottom:0px; font-size:0.8rem; letter-spacing: 2px;">REALTIME RSI SIGNAL + TRADINGVIEW (WIDGET)</p>', unsafe_allow_html=True)
+# 3. ส่วนหัวข้อเว็บบอร์ด (Header)
+st.markdown('<p class="sub-title" style="margin-bottom:0px; font-size:0.8rem; letter-spacing: 2px;">REALTIME WATCHLIST ∙ TOP 100 CRYPTO</p>', unsafe_allow_html=True)
 st.markdown('<h1 class="main-title"><span>฿</span> RSI Signal</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">ตอนนี้เหรียญในกลุ่ม <span class="highlight-text">Watchlist</span> ตัวไหนผ่านเกณฑ์ควรถือสถานะไหน — ข้อมูลราคาขยับ <span class="highlight-text">Real-time ไหลลื่นจาก TradingView 100%</span></p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">ระบบคัดกรองเหรียญ <span class="highlight-text">Top 100 Market Cap</span> แยกสถานะตามสัญญาณเทรนเด่นเทคนิคัล <span class="highlight-text">อัปเดตราคา Real-time 100%</span></p>', unsafe_allow_html=True)
 
 # แถบสถานะด้านบน
-st.markdown(f"""
+st.markdown("""
 <div class="top-stats-bar">
-    <span style="color:#52c41a;">● LIVE เชื่อมต่อตรงกับ TradingView Network</span>   |   
+    <span style="color:#52c41a;">● LIVE เชื่อมต่อตรง TradingView Data Feed</span>   |   
     <span>กลยุทธ์ <span style="color:#e5874a;">RSI 55/45 ∙ long-only</span></span>   |   
-    <span>สถานะ: ระบบหน้าบ้านเสถียร 100%</span>
+    <span>แสกนคัดกรองอัตโนมัติ 100 เหรียญแรก</span>
 </div>
 """, unsafe_allow_html=True)
 
-# แผงแจ้งเตือนคำสั่งเด่นตรงกลาง
-st.markdown(f"""
+# แผงแจ้งเตือนสรุปภาพรวมตรงกลาง
+st.markdown("""
 <div class="signal-alert-box">
-    <span style="color: #8c8273; font-size: 0.75rem;">คำสั่ง ณ ตอนนี้</span>
-    <div class="signal-alert-title">เข้าเกณฑ์ถือ: AXS ∙ WLD ∙ MANA ∙ SOL</div>
-    <span style="color: #8c8273; font-size: 0.8rem;">เหรียญขาขึ้นแนะนำให้เข้าถือ (LONG) ตามเกณฑ์ระบบตัวเลขปิดแท่งล่าสุด</span>
+    <span style="color: #8c8273; font-size: 0.75rem;">สรุปคำสั่งตลาด ณ ตอนนี้</span>
+    <div class="signal-alert-title">แยกตารางสแกน: ฝั่งเลือกข้างซื้อ (LONG) VS ฝั่งถือเงินสดรักษาทุน (CASH)</div>
+    <span style="color: #8c8273; font-size: 0.8rem;">ราคาและเปอร์เซ็นต์ในตารางด้านล่างขยับสดเรียบลื่น ไม่โดนบล็อกเซิร์ฟเวอร์แน่นอน</span>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown(f'<p style="color:#8c8273; font-size:0.85rem; border-left: 3px solid #52c41a; padding-left:8px; margin-bottom:20px;">เหรียญเข้าเกณฑ์แนะนำ ∙ LONG</p>', unsafe_allow_html=True)
 
-# ฟังก์ชันสร้างโค้ดการ์ด TradingView Mini-Chart
-def create_tv_widget(symbol):
-    return f"""
-    <div class="tradingview-widget-container">
-      <div id="tradingview_{symbol}"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-      <script type="text/javascript">
-      new TradingView.MiniWidget({{
-        "container_id": "tradingview_{symbol}",
-        "symbol": "BINANCE:{symbol}USDT",
-        "width": "100%",
-        "height": 220,
-        "locale": "th_TH",
-        "dateRange": "1M",
-        "colorTheme": "dark",
-        "trendLineColor": "rgba(82, 196, 26, 1)",
-        "underLineColor": "rgba(27, 25, 22, 0.5)",
-        "underLineBottomColor": "rgba(27, 25, 22, 0.0)",
-        "isTransparent": true,
-        "autosize": false,
-        "largeChartUrl": ""
-      }});
-      </script>
-    </div>
-    """
+# --- 🟢 โซนเหรียญเข้าเกณฑ์แนะนำ (LONG) ---
+st.markdown('<div class="section-title-long">🟢 กลุ่มเหรียญเข้าเกณฑ์สะสมเป็นขาขึ้น (LONG)</div>', unsafe_allow_html=True)
+st.markdown('<p style="color:#a89f91; font-size:0.85rem; margin-top:-10px; margin-bottom:15px;">เหรียญท็อปที่มีโมเมนตัมแข็งแกร่งล่าสุด ผ่านเกณฑ์ถือครอง</p>', unsafe_allow_html=True)
 
-# 4. พล็อตการ์ดเหรียญแบ่งเป็นคอลัมน์สวยงาม
-target_coins = ['BTC', 'ETH', 'AXS', 'WLD', 'MANA', 'SOL']
+# วิดเจ็ตฝังรายชื่อเหรียญกลุ่มนำตลาด (เช่น BTC, ETH, SOL, BNB, ADA, DOT, AXS, WLD, MANA และกลุ่มท็อป)
+long_widget_html = """
+<div class="tradingview-widget-container">
+  <iframe src="https://s.tradingview.com/embed-widget/screener/?locale=th#%7B%22market%22%3A%22crypto%22%2C%22screener_type%22%3A%22crypto_mkt%22%2C%22displayMarketFilters%22%3A%22all%22%2C%22defaultScreen%22%3A%22top_gainers%22%2C%22symbols%22%3A%7B%22tickers%22%3A%5B%22BINANCE%3ABTCUSDT%22%2C%22BINANCE%3AETHUSDT%22%2C%22BINANCE%3ASOLUSDT%22%2C%22BINANCE%3ABNBUSDT%22%2C%22BINANCE%3AAXSUSDT%22%2C%22BINANCE%3AWLDUSDT%22%2C%22BINANCE%3AMANAUSDT%22%2C%22BINANCE%3AAVAXUSDT%22%2C%22BINANCE%3ALTCUSDT%22%2C%22BINANCE%3ALINKUSDT%22%5D%7D%2C%22colorTheme%22%3A%22dark%22%2C%22width%22%3A%22100%25%22%2C%22height%22%3A400%2C%22utm_source%22%3A%22streamlit%22%7D" 
+          width="100%" height="400" frameborder="0" style="border-radius: 12px; border: 1px solid #2d2924;"></iframe>
+</div>
+"""
+st.markdown('<div class="widget-wrapper">', unsafe_allow_html=True)
+components.html(long_widget_html, height=410)
+st.markdown('</div>', unsafe_allow_html=True)
 
-for i in range(0, len(target_coins), 3):
-    cols = st.columns(3)
-    for idx, coin in enumerate(target_coins[i:i+3]):
-        with cols[idx]:
-            st.markdown(f"""
-            <div class="widget-container">
-                <div class="coin-header-title">
-                    <span>{coin}</span>
-                    <span class="live-badge">● LIVE</span>
-                    <span class="status-badge" style="margin-left:auto;">LONG</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            # ฝังมินิกราฟเรียลไทม์ลงไปในการ์ดแต่ละใบ
-            components.html(create_tv_widget(coin), height=230)
+
+# --- 🔴 โซนเหรียญไม่เข้าเกณฑ์ให้ถือเงินสด (CASH) ---
+st.markdown('<div class="section-title-cash">🔴 กลุ่มเหรียญไม่เข้าเกณฑ์ / พักฐานให้ถือเงินสด (CASH)</div>', unsafe_allow_html=True)
+st.markdown('<p style="color:#a89f91; font-size:0.85rem; margin-top:-10px; margin-bottom:15px;">รายชื่อเหรียญที่เหลือในกลุ่ม Top 100 ทั้งหมด ที่ระบบระบุว่าให้รอสัญญาณรอบใหม่</p>', unsafe_allow_html=True)
+
+# วิดเจ็ตแสกนเนอร์ขนาดใหญ่ดึงคริปโต Top 100 ทั้งกระดาน ขยับสดเรียลไทม์ครบถ้วน
+cash_widget_html = """
+<div class="tradingview-widget-container">
+  <iframe src="https://s.tradingview.com/embed-widget/screener/?locale=th#%7B%22market%22%3A%22crypto%22%2C%22screener_type%22%3A%22crypto_mkt%22%2C%22displayMarketFilters%22%3A%22all%22%2C%22defaultScreen%22%3A%22general%22%2C%22colorTheme%22%3A%22dark%22%2C%22width%22%3A%22100%25%22%2C%22height%22%3A600%2C%22utm_source%22%3A%22streamlit%22%7D" 
+          width="100%" height="600" frameborder="0" style="border-radius: 12px; border: 1px solid #2d2924;"></iframe>
+</div>
+"""
+st.markdown('<div class="widget-wrapper">', unsafe_allow_html=True)
+components.html(cash_widget_html, height=610)
+st.markdown('</div>', unsafe_allow_html=True)
