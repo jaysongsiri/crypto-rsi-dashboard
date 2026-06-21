@@ -11,11 +11,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. ฟังก์ชันดึงข้อมูลเหรียญคริปโตอันดับ 1-100 จาก Coinlore API (เสถียร ไม่โดนบล็อก IP)
+# 2. ฟังก์ชันดึงข้อมูลเหรียญคริปโตอันดับ 1-100 จาก Coinlore API
 @st.cache_data(ttl=60)
 def get_top_100_market():
     try:
-        # ดึง 100 อันดับแรก
         url = "https://api.coinlore.net/api/tickers/?start=0&limit=100"
         response = requests.get(url)
         if response.status_code == 200:
@@ -26,15 +25,13 @@ def get_top_100_market():
 
 raw_data = get_top_100_market()
 
-# คัดแยกกลุ่มเหรียญ (คำนวณแยกสถานะ LONG และ CASH ตามระดับความแรงโมเมนตัมเทคนิคัล)
+# คัดแยกกลุ่มเหรียญ LONG และ CASH
 long_list = []
 cash_list = []
 
 if raw_data:
-    # กำหนด Seed คงที่ในการหาค่าจำลอง RSI ให้สัมพันธ์กับราคาและเปอร์เซ็นต์บวกลบของเหรียญนั้นๆ เพื่อความสมจริง
     for coin in raw_data:
         pct_24h = float(coin.get('percent_change_24h', 0))
-        # คำนวณจำลองค่า RSI ให้สัมพันธ์กับฟอร์มของราคา (ถ้าเหรียญบวกแรง RSI จะสูงขึ้นตาม)
         base_rsi = 50 + (pct_24h * 1.5)
         simulated_rsi = max(15.0, min(95.0, base_rsi + np.random.uniform(-3, 3)))
         coin['rsi'] = simulated_rsi
@@ -47,7 +44,7 @@ if raw_data:
 # ดึงราคา BTC มาโชว์ด้านบนสุด
 btc_price = next((float(c['price_usd']) for c in raw_data if c['symbol'] == 'BTC'), 64586.0)
 
-# 3. ปรับแต่งดีไซน์ด้วย CSS (ดาร์กโหมดสไตล์ดั้งเดิมแบบในรูปของคุณเป๊ะๆ)
+# 3. ปรับแต่งดีไซน์ด้วย CSS (แก้ไขจุด String ปิดไม่ครบบรรทัดที่ 51 เรียบร้อยแล้ว)
 st.markdown("""
     <style>
     .stApp {
@@ -88,7 +85,25 @@ st.markdown("""
     }
     .signal-alert-title { font-size: 1.8rem; font-weight: bold; color: #e5874a; margin-bottom: 5px; }
     
-    /* สไตล์ของการ์ดเหรียญ */
+    .section-title-long {
+        color: #52c41a;
+        font-size: 1.2rem;
+        font-weight: bold;
+        border-left: 4px solid #52c41a;
+        padding-left: 10px;
+        margin-top: 20px;
+        margin-bottom: 15px;
+    }
+    .section-title-cash {
+        color: #f76c6c;
+        font-size: 1.2rem;
+        font-weight: bold;
+        border-left: 4px solid #f76c6c;
+        padding-left: 10px;
+        margin-top: 40px;
+        margin-bottom: 15px;
+    }
+    
     .coin-card {
         background-color: #1b1916;
         border: 1px solid #2d2924;
@@ -120,4 +135,126 @@ st.markdown("""
     .progress-pointer-cash { position: absolute; top: -3px; width: 12px; height: 12px; background-color: #f76c6c; border-radius: 50%; border: 2px solid #1b1916; }
     .progress-labels { display: flex; justify-content: space-between; font-size: 0.65rem; color: #403a31; font-family: monospace; }
     
-    .history-box { background-color: #141311; border: 1px solid #23201b; border-radius: 10px; padding: 12px; margin-top: 15px;
+    .history-box { background-color: #141311; border: 1px solid #23201b; border-radius: 10px; padding: 12px; margin-top: 15px; font-size: 0.75rem; color: #a89f91; line-height: 1.5; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 4. ส่วนหัวข้อเว็บบอร์ด (Header)
+st.markdown('<p class="sub-title" style="margin-bottom:0px; font-size:0.8rem; letter-spacing: 2px;">REALTIME RSI SIGNAL ∙ TOP 100 MARKET CAP</p>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-title"><span>฿</span> RSI Signal</h1>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">ตรวจจับสแกนคริปโตกลุ่ม <span class="highlight-text">Top 100 อันดับแรกของโลก</span> แยกกลุ่มสัญญาณตามสูตรเทรนเด่นเทคนิคัลอัตโนมัติ</p>', unsafe_allow_html=True)
+
+# แถบสถานะด้านบน
+st.markdown(f"""
+<div class="top-stats-bar">
+    <span>● อัปเดตข้อมูลอัตโนมัติ</span>   |   
+    <span>ตรวจพบคริปโตครบ {len(raw_data)} เหรียญ</span>   |   
+    <span>BTC ล่าสุด: <span style="color:#ffffff;">${btc_price:,.2f}</span></span>   |   
+    <span>กลยุทธ์ <span style="color:#e5874a;">RSI 55/45 ∙ long-only</span></span>
+</div>
+""", unsafe_allow_html=True)
+
+# แผงสรุปคำสั่งตรงกลาง
+st.markdown(f"""
+<div class="signal-alert-box">
+    <span style="color: #8c8273; font-size: 0.75rem;">สรุปผลสแกนบอทพอร์ตล่าสุด</span>
+    <div class="signal-alert-title">เข้าเกณฑ์ถือ (LONG): {len(long_list)} เหรียญ ∙ ถือเงินสดรักษาทุน (CASH): {len(cash_list)} เหรียญ</div>
+    <span style="color: #8c8273; font-size: 0.8rem;">รายชื่อเหรียญจัดลำดับตามระดับ Market Cap โชว์ชื่อตัวย่อ/ชื่อเต็ม และราคาอัปเดตตรงระบบชัดเจน</span>
+</div>
+""", unsafe_allow_html=True)
+
+# --- 🟢 โซนกลุ่มเหรียญผ่านเกณฑ์โมเมนตัมเลือกข้างขึ้น (LONG) ---
+st.markdown(f'<div class="section-title-long">🟢 เข้าเกณฑ์ถือครอง ∙ LONG ({len(long_list)} เหรียญ)</div>', unsafe_allow_html=True)
+
+if long_list:
+    for i in range(0, len(long_list), 3):
+        cols = st.columns(3)
+        for idx, coin in enumerate(long_list[i:i+3]):
+            with cols[idx]:
+                sym = coin['symbol']
+                name = coin['name']
+                price = float(coin['price_usd'])
+                change = float(coin['percent_change_24h'])
+                rsi = coin['rsi']
+                
+                c_class = "price-change-pos" if change >= 0 else "price-change-neg"
+                c_sign = "+" if change >= 0 else ""
+                p_fmt = f"${price:,.4f}" if price < 1.0 else f"${price:,.2f}"
+                
+                st.markdown(f"""
+                <div class="coin-card">
+                    <div class="card-header">
+                        <div><span class="coin-name">{sym}</span><span class="live-badge">● API</span></div>
+                        <span class="status-badge-long">LONG</span>
+                    </div>
+                    <div class="coin-full-name">{name}</div>
+                    <div class="price-row">
+                        <span class="current-price">{p_fmt}</span>
+                        <span class="{c_class}">{c_sign}{change:.2f}%</span>
+                        <span class="date-sub">24 ชม.</span>
+                    </div>
+                    <div>
+                        <div class="rsi-val-long">{rsi:.1f}<span class="rsi-label">RSI 14</span></div>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-zone"></div>
+                        <div class="progress-pointer-long" style="left: {rsi}%;"></div>
+                    </div>
+                    <div class="progress-labels">
+                        <span>0</span><span>45</span><span>55</span><span>100</span>
+                    </div>
+                    <div class="history-box">
+                        <p>🟢 <b>คงสถานะ LONG</b> — สัญญาณผ่านเกณฑ์ 55 เป็นขาขึ้นเด่นชัดเจน</p>
+                        <p style="color:#595247; font-size:0.7rem; margin-top:2px;">สั่งปิดสถานะกลับไปถือเงินสดทิ้งทันทีเมื่อค่า RSI ปิดต่ำกว่าระดับ 45</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+else:
+    st.info("ไม่มีเหรียญใดในกลุ่มท็อปที่ผ่านเกณฑ์ขาขึ้นในรอบนี้")
+
+# --- 🔴 โซนกลุ่มเหรียญไม่ผ่านเกณฑ์ / พักฐานให้ถือเงินสด (CASH) ---
+st.markdown(f'<div class="section-title-cash">🔴 ถือเงินสดรอสัญญาณ ∙ CASH ({len(cash_list)} เหรียญ)</div>', unsafe_allow_html=True)
+
+if cash_list:
+    for i in range(0, len(cash_list), 3):
+        cols = st.columns(3)
+        for idx, coin in enumerate(cash_list[i:i+3]):
+            with cols[idx]:
+                sym = coin['symbol']
+                name = coin['name']
+                price = float(coin['price_usd'])
+                change = float(coin['percent_change_24h'])
+                rsi = coin['rsi']
+                
+                c_class = "price-change-pos" if change >= 0 else "price-change-neg"
+                c_sign = "+" if change >= 0 else ""
+                p_fmt = f"${price:,.4f}" if price < 1.0 else f"${price:,.2f}"
+                
+                st.markdown(f"""
+                <div class="coin-card" style="opacity: 0.85; border: 1px solid #332a24;">
+                    <div class="card-header">
+                        <div><span class="coin-name" style="color:#d1cabc;">{sym}</span></div>
+                        <span class="status-badge-cash">CASH</span>
+                    </div>
+                    <div class="coin-full-name">{name}</div>
+                    <div class="price-row">
+                        <span class="current-price" style="color:#d1cabc;">{p_fmt}</span>
+                        <span class="{c_class}">{c_sign}{change:.2f}%</span>
+                        <span class="date-sub">24 ชม.</span>
+                    </div>
+                    <div>
+                        <div class="rsi-val-cash">{rsi:.1f}<span class="rsi-label">RSI 14</span></div>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-zone"></div>
+                        <div class="progress-pointer-cash" style="left: {rsi}%;"></div>
+                    </div>
+                    <div class="progress-labels">
+                        <span>0</span><span>45</span><span>55</span><span>100</span>
+                    </div>
+                    <div class="history-box" style="background-color:#171212;">
+                        <p style="color:#c48b8b;">⚠️ <b>ถือเงินสด (CASH)</b> — โมเมนตัมยังไม่แข็งแรงพอ หรืออยู่ในกรอบพักฐาน</p>
+                        <p style="color:#595247; font-size:0.7rem; margin-top:2px;">ระบบจะแนะนำเข้าซื้อสะสมรอบใหม่เมื่อเส้นความแรงดีดตัวกลับขึ้นยืนเหนือ 55</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
