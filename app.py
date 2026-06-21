@@ -88,41 +88,40 @@ st.markdown('<p class="sub-title" style="margin-bottom:0px; font-size:0.8rem; le
 st.markdown('<h1 class="main-title"><span>฿</span> RSI Signal</h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-title">ตอนนี้เหรียญในกลุ่ม <span class="highlight-text">Top 100 Market Cap</span> ตัวไหนผ่านเกณฑ์ควรถือสถานะไหน — ข้อมูลราคา <span class="highlight-text">อัปเดตสด Real-time ตลอดเวลา</span></p>', unsafe_allow_html=True)
 
-# ฟังก์ชันดึงราคาเรียลไทม์จาก Binance API
-def get_binance_ticker():
+# เปลี่ยนมาใช้ CryptoCompare API ซึ่งเปิดกว้างและไม่บล็อก IP ของ Server Streamlit Cloud
+def get_global_prices():
     try:
-        res = requests.get("https://api.binance.com/api/v3/ticker/24hr")
+        url = "https://min-api.cryptocompare.com/data/pricemultifull"
+        params = {
+            "fsyms": "BTC,ETH,AXS,WLD,MANA,SOL,BNB,ADA",
+            "tsyms": "USD"
+        }
+        res = requests.get(url, params=params)
         if res.status_code == 200:
-            df = pd.DataFrame(res.json())
-            if not df.empty and 'symbol' in df.columns:
-                df = df[df['symbol'].str.endswith('USDT')]
-                return df
+            return res.json().get('RAW', {})
     except:
         pass
-    return pd.DataFrame()
+    return {}
 
-# 4. ส่วนกล่องแสดงผลลัพธ์แบบ Real-time (ทำงานวนลูปอัตโนมัติ)
+# 4. ส่วนกล่องแสดงผลลัพธ์แบบ Real-time
 @st.fragment
 def show_realtime_dashboard():
-    df_prices = get_binance_ticker()
+    raw_prices = get_global_prices()
     
-    # ระบบป้องกันแอปพัง: ถ้า API ส่งข้อมูลไม่ทัน ให้รอ 2 วินาทีแล้วดึงใหม่
-    if df_prices.empty or 'symbol' not in df_prices.columns:
-        st.warning("⚠️ กำลังเชื่อมต่อท่อข้อมูล Binance API ใหม่สักครู่...")
-        time.sleep(2)
+    # ระบบป้องกันแอปพัง: ถ้าไม่มีข้อมูล ให้รอแล้วดึงใหม่
+    if not raw_prices:
+        st.warning("⚠️ กำลังเชื่อมต่อท่อส่งข้อมูลราคาสำรองใหม่สักครู่...")
+        time.sleep(3)
         st.rerun()
     
-    # รายชื่อเหรียญที่เราใช้สแกนและจับตาดู
-    target_symbols = ['BTCUSDT', 'ETHUSDT', 'AXSUSDT', 'WLDUSDT', 'MANAUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT']
-    
     # ดึงราคา BTC สำหรับแถบสถานะด้านบน
-    btc_row = df_prices[df_prices['symbol'] == 'BTCUSDT']
-    btc_p = float(btc_row['lastPrice'].values[0]) if not btc_row.empty else 64586.0
+    btc_p = raw_prices.get('BTC', {}).get('USD', {}).get('PRICE', 64586.0)
+    target_coins = ['BTC', 'ETH', 'AXS', 'WLD', 'MANA', 'SOL', 'BNB', 'ADA']
     
     st.markdown(f"""
     <div class="top-stats-bar">
         <span style="color:#52c41a;">● LIVE กำลังอัปเดตสดทุกวินาที</span>   |   
-        <span>{len(target_symbols)} เหรียญใน Watchlist</span>   |   
+        <span>{len(target_coins)} เหรียญใน Watchlist</span>   |   
         <span>BTC <span style="color:#ffffff;">${btc_p:,.2f}</span></span>   |   
         <span>กลยุทธ์ <span style="color:#e5874a;">RSI 55/45 ∙ long-only</span></span>
     </div>
@@ -130,19 +129,18 @@ def show_realtime_dashboard():
     
     # สแกนและกรองเหรียญเข้าสู่สถานะ LONG
     long_coins_data = []
-    np.random.seed(int(time.time()) % 100) # เปลี่ยน seed เล็กน้อยตามเวลาเพื่อให้ข้อมูล RSI ขยับสอดคล้องกับราคาจริง
+    np.random.seed(int(time.time()) % 100)
     
-    for sym in target_symbols:
-        row = df_prices[df_prices['symbol'] == sym]
-        if not row.empty:
-            display_name = sym.replace('USDT', '')
-            last_price = float(row['lastPrice'].values[0])
-            price_change = float(row['priceChangePercent'].values[0])
-            rsi = float(np.random.uniform(53, 66)) # จำลองการขึ้นลงของโมเมนตัม
+    for sym in target_coins:
+        coin_data = raw_prices.get(sym, {}).get('USD', {})
+        if coin_data:
+            last_price = coin_data.get('PRICE', 0.0)
+            price_change = coin_data.get('CHANGEPCT24HOUR', 0.0)
+            rsi = float(np.random.uniform(53, 66)) # จำลองการขึ้นลงของโมเมนตัม RSI
             
             if rsi > 55:  
                 long_coins_data.append({
-                    'name': display_name,
+                    'name': sym,
                     'price': last_price,
                     'change': price_change,
                     'rsi': rsi
@@ -197,8 +195,8 @@ def show_realtime_dashboard():
                     </div>
                     """, unsafe_allow_html=True)
                     
-    # หน่วงเวลา 2 วินาทีก่อนอัปเดตราคาใหม่รอบถัดไป
-    time.sleep(2)
+    # รีเฟรชข้อมูลราคาทุก ๆ 3 วินาที
+    time.sleep(3)
     st.rerun()
 
 # สั่งให้ฟังก์ชันเริ่มทำงาน
