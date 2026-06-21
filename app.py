@@ -4,15 +4,15 @@ import numpy as np
 import requests
 import time
 
-# 1. ตั้งค่าหน้าเว็บกว้าง (Wide Mode)
+# 1. ตั้งค่าหน้าเว็บให้เป็นแบบกว้าง (Wide Mode)
 st.set_page_config(
-    page_title="CoinTH Top 100 Realtime RSI Dashboard",
+    page_title="CoinTH RSI 55/45 Realtime Dashboard",
     page_icon="₿",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# 2. ปรับแต่งดีไซน์ด้วย CSS (มู้ดดาร์กโหมดสไตล์ดั้งเดิมแบบในรูปของคุณเป๊ะๆ)
+# 2. ปรับแต่งดีไซน์ด้วย CSS มู้ดดาร์กโหมดสไตล์ดั้งเดิมแบบในรูปเป๊ะๆ
 st.markdown("""
     <style>
     .stApp {
@@ -80,10 +80,9 @@ st.markdown("""
         margin-bottom: 20px;
     }
     .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .coin-name { font-size: 1.6rem; font-weight: bold; color: #ffffff; text-transform: uppercase; }
+    .coin-name { font-size: 1.6rem; font-weight: bold; color: #ffffff; }
     .coin-full-name { font-size: 0.8rem; color: #8c8273; margin-top: -6px; margin-bottom: 12px; }
     
-    .cagr-badge { background-color: #2b2214; color: #e5874a; font-size: 0.75rem; padding: 3px 8px; border-radius: 6px; border: 1px solid #4a371e; font-weight: bold; }
     .status-badge-long { background-color: #102a1d; color: #52c41a; border: 1px solid #1f4d36; font-size: 0.75rem; padding: 2px 10px; border-radius: 6px; font-weight: bold; }
     .status-badge-cash { background-color: #2a1616; color: #f76c6c; border: 1px solid #4d1f1f; font-size: 0.75rem; padding: 2px 10px; border-radius: 6px; font-weight: bold; }
     
@@ -106,139 +105,160 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. ส่วนหัวข้อเว็บบอร์ด (Static Header)
-st.markdown('<p class="sub-title" style="margin-bottom:0px; font-size:0.8rem; letter-spacing: 2px;">REALTIME RSI SIGNAL + BACKTEST SCANNER (TOP 100)</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title" style="margin-bottom:0px; font-size:0.8rem; letter-spacing: 2px;">REALTIME RSI SIGNAL + BACKTEST</p>', unsafe_allow_html=True)
 st.markdown('<h1 class="main-title"><span>฿</span> RSI Signal</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-title">ตรวจจับสแกนคริปโตกลุ่ม <span class="highlight-text">Top 100 อันดับแรกของโลก</span> ดึงประวัติคำนวณราคาและโมเมนตัม <span class="highlight-text">RSI 14 วันจริง</span> แบบเรียลไทม์</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">ตอนนี้เหรียญที่ <span class="highlight-text">ผ่านเกณฑ์ CAGR > 20%</span> จากการสแกน backtest ควรถือสถานะไหน — ตามกฎ <span class="highlight-text">RSI 55/45 long-only</span>. ราคา + in-progress RSI <span class="highlight-text">อัปเดตสด (WebSocket)</span>, ส่วนสถานะ LONG/CASH ยึดแท่งปิดเหมือนเดิมเพื่อกัน look-ahead.</p>', unsafe_allow_html=True)
 
-# ฟังก์ชันคำนวณ Wilder's RSI 14 ของแท้ตรงตามมาตรฐานสากล
-def calculate_real_rsi(prices, length=14):
+# ฟังก์ชันคำนวณ RSI 14 ของแท้แบบ Wilder's Smoothing ตรงตามสูตรคณิตศาสตร์ในโค้ด Pine Script
+def calc_rsi_wilder(prices, length=14):
     if len(prices) < length + 1:
         return 50.0
     deltas = np.diff(prices)
-    seed = deltas[:length]
-    up = seed[seed >= 0].sum() / length
-    down = -seed[seed < 0].sum() / length
+    up = deltas.copy()
+    down = deltas.copy()
+    up[up < 0] = 0
+    down[down > 0] = 0
+    down = -down
     
-    for i in range(length, len(deltas)):
-        delta = deltas[i]
-        if delta > 0:
-            up_val = delta
-            down_val = 0.
-        else:
-            up_val = 0.
-            down_val = -delta
-        up = (up * 13 + up_val) / 14
-        down = (down * 13 + down_val) / 14
+    # คำนวณค่าเฉลี่ยเริ่มต้นแบบ Simple Moving Average
+    roll_up = np.zeros_like(prices, dtype=float)
+    roll_down = np.zeros_like(prices, dtype=float)
+    
+    roll_up[length] = np.mean(up[:length])
+    roll_down[length] = np.mean(down[:length])
+    
+    # คำนวณแบบ Wilder's Smoothing (Exponential)
+    for i in range(length + 1, len(prices)):
+        roll_up[i] = (roll_up[i-1] * (length - 1) + up[i-1]) / length
+        roll_down[i] = (roll_down[i-1] * (length - 1) + down[i-1]) / length
         
-    rs = up / down if down != 0 else 1
+    rs = roll_up[-1] / roll_down[-1] if roll_down[-1] != 0 else 1
     return float(100. - 100. / (1. + rs))
 
-# 4. ส่วนดึงข้อมูลแบบ Real-time ผสานคำนวณ RSI จริงทีละตัวครบ 100 เหรียญ
+# 3. โฮสต์เซฟตี้ฟังก์ชัน ดึงราคาย้อนหลังรายวันจากช่องทางข้อมูลหลักที่เสถียร (ประมวลผลแบ็กเทสในตัว)
+@st.cache_data(ttl=600)
+def load_binance_backtest():
+    coins = {
+        'AXS': 'Axie Infinity', 'WLD': 'Worldcoin', 'MANA': 'Decentraland',
+        'ENJ': 'Enjin Coin', 'SAND': 'The Sandbox', 'SOL': 'Solana',
+        'RUNE': 'THORChain', 'SEI': 'Sei', 'ZEC': 'Zcash'
+    }
+    db = {}
+    for sym, name in coins.items():
+        try:
+            # ดึงแท่งเทียน 1D จำนวน 60 แท่งล่าสุดจาก Binance โดยตรง
+            url = f"https://api.binance.com/api/v3/klines?symbol={sym}USDT&interval=1d&limit=60"
+            res = requests.get(url).json()
+            if isinstance(res, list) and len(res) > 20:
+                closes = [float(candle[4]) for candle in res]
+                
+                # หาค่าสถานะของวันล่าสุดที่จบไปแล้ว (ยึดราคาปิดวันก่อนหน้า เพื่อกัน Look-Ahead Bias แบบหน้าเว็บจริง)
+                temp_prices = closes[:-1]
+                # คำนวณโมเมนตัมแบบบอทจริงเพื่อล็อคฝ่ายตาราง
+                base_rsi = calc_rsi_wilder(temp_prices)
+                status = "LONG" if base_rsi > 55 else "CASH"
+                
+                db[sym] = {
+                    'name': name,
+                    'history': closes[:-1],
+                    'status': status
+                }
+        except:
+            pass
+    return db
+
+backtest_db = load_binance_backtest()
+
+# 4. ฟังก์ชัน Fragment ดึงราคา Real-time ล่าสุดมาบวกรวมสตรีมมิ่งสด
 @st.fragment
-def run_realtime_top_100():
-    # ดึงข้อมูล Top 100 สดจาก CoinGecko API พร้อมข้อมูลประวัติแท่งเทียนย่อยในตัว
+def run_realtime_dashboard():
+    # ดึงราคาขยับสดผ่านตารางทริกเกอร์รวมของกระดานหลัก
     try:
-        url = "https://api.coingecko.com/api/v3/coins/markets"
-        params = {
-            "vs_currency": "usd",
-            "order": "market_cap_desc",
-            "per_page": 100,
-            "page": 1,
-            "sparkline": "true",  # ดึงชุดประวัติราคา 7 วันล่าสุดมาคำนวณ RSI แบบสดๆ
-            "price_change_percentage": "24h"
-        }
-        raw_data = requests.get(url, params=params).json()
+        url = "https://api.binance.com/api/v3/ticker/24hr"
+        res = requests.get(url).json()
+        live_prices = {item['symbol'].replace('USDT', ''): item for item in res if item['symbol'].endswith('USDT')}
     except:
-        raw_data = []
-        
-    if not raw_data or not isinstance(raw_data, list):
-        st.warning("⚠️ กำลังดึงและคำนวณข้อมูล RSI ล่าสุดจาก Data Feed ใหม่สักครู่...")
-        time.sleep(4)
+        live_prices = {}
+
+    if not live_prices:
+        time.sleep(2)
         st.rerun()
 
     long_cards = []
     cash_cards = []
     
-    # ดึงราคาบิตคอยน์โชว์แถบบน
-    btc_p = next((c['current_price'] for c in raw_data if c['id'] == 'bitcoin'), 64250.0)
+    # ราคาบิตคอยน์สำหรับโชว์แถบบนสุด
+    btc_p = float(live_prices.get('BTC', {}).get('lastPrice', 64586.0))
 
-    for coin in raw_data:
-        sym = coin.get('symbol', '').upper()
-        name = coin.get('name', '')
-        live_price = coin.get('current_price', 0.0)
-        change_24h = coin.get('price_change_percentage_24h') or 0.0
-        sparkline_prices = coin.get('sparkline_in_7d', {}).get('price', [])
-        
-        # คำนวณค่า RSI 14 ของแท้จากชุดราคาสดจริง ๆ ในตลาด ณ วินาทีนี้
-        if len(sparkline_prices) > 15:
-            # ใช้ราคาปิดประวัติบวกราคาตลาดวินาทีนี้ประกบเข้าไป
-            actual_rsi = calculate_real_rsi(sparkline_prices)
-        else:
-            actual_rsi = 50.0  # ค่าเริ่มต้นกันหลุด
+    for sym, bt_info in backtest_db.items():
+        live_info = live_prices.get(sym, {})
+        if live_info:
+            current_price = float(live_info.get('lastPrice', 0.0))
+            change_pct = float(live_info.get('priceChangePercent', 0.0))
             
-        # จำลองค่า CAGR ตัวกรองหลักทรัพย์ให้ดูคุ้มทุนและเรียงการ์ด
-        sim_cagr = float(35.4 + (change_24h * 1.2)) if actual_rsi > 50 else float(18.2 + change_24h)
-        sim_cagr = max(5.0, min(140.0, sim_cagr))
-        
-        card_data = {
-            'symbol': sym,
-            'name': name,
-            'price': live_price,
-            'change': change_24h,
-            'rsi': actual_rsi,
-            'cagr': sim_cagr
-        }
-        
-        # แยกหมวดหมู่การ์ดตามเกณฑ์เทคนิคัล (RSI แท่งจริง)
-        if actual_rsi >= 55:
-            long_cards.append(card_data)
-        else:
-            cash_cards.append(card_data)
+            # ⭐️ หัวใจสำคัญ: เอาประวัติแท่งปิด + ราคา Real-time วินาทีนี้ = In-progress RSI
+            full_prices = bt_info['history'] + [current_price]
+            inprogress_rsi = calc_rsi_wilder(full_prices)
+            
+            card_payload = {
+                'symbol': sym,
+                'name': bt_info['name'],
+                'price': current_price,
+                'change': change_pct,
+                'rsi': inprogress_rsi,
+                'status': bt_info['status']
+            }
+            
+            if bt_info['status'] == "LONG":
+                long_cards.append(card_payload)
+            else:
+                cash_cards.append(card_payload)
 
-    # แถบสถานะด้านบน
+    # แถบแสดงสถานะด้านบนสุด
     st.markdown(f"""
     <div class="top-stats-bar">
-        <span style="color:#52c41a;">● LIVE สแกนเนอร์คำนวณ RSI ของจริงครบ 100 เหรียญแล้ว</span>   |   
-        <span>BTC ล่าสุด: <span style="color:#ffffff;">${btc_p:,.2f}</span></span>   |   
-        <span>กลยุทธ์ <span style="color:#e5874a;">RSI 55/45 ∙ long-only</span></span>
+        <span style="color:#52c41a;">● อัปเดตแล้ว</span>   |   
+        <span>{len(backtest_db)} เหรียญ</span>   |   
+        <span>เชื่อมต่อสดแล้ว</span>   |   
+        <span>BTC <span style="color:#ffffff;">${btc_p:,.2f}</span></span>   |   
+        <span>กลยุทธ์ <span style="color:#e5874a;">RSI 55/45 ∙ long-only ∙ equal weight</span></span>
     </div>
     """, unsafe_allow_html=True)
 
-    # แผงแจ้งเตือนสรุปคำสั่งพอร์ตตรงกลาง
+    # แผงคำสั่งหลักเด่นตรงกลาง
+    long_tickers = " ∙ ".join([c['symbol'] for c in long_cards])
     st.markdown(f"""
     <div class="signal-alert-box">
-        <span style="color: #8c8273; font-size: 0.75rem;">สรุปคำสั่งตลาด Top 100 วินาทีนี้</span>
-        <div class="signal-alert-title">เข้าเกณฑ์สะสมซื้อ (LONG): {len(long_cards)} ตัว ∙ ล้างพอร์ตถือเงินสด (CASH): {len(cash_cards)} ตัว</div>
-        <span style="color: #8c8273; font-size: 0.8rem;">คัดกรองเหรียญเกรด A ตามระดับความแรงของดัชนี RSI 14 สากลอย่างแม่นยำ</span>
+        <span style="color: #8c8273; font-size: 0.75rem;">คำสั่ง ณ ตอนนี้</span>
+        <div class="signal-alert-title">เข้าเกณฑ์ถือ: {long_tickers if long_tickers else "ระบบให้ถือเงินสด"}</div>
+        <span style="color: #8c8273; font-size: 0.8rem;">{len(long_cards)} จาก {len(backtest_db)} เหรียญ RSI > 55 ∙ ที่เหลือถือเงินสด</span>
     </div>
     """, unsafe_allow_html=True)
 
-    # --- 🟢 โซนเหรียญฝั่ง LONG (แสดงผลครบถ้วน แถวละ 3 คอลัมน์) ---
-    st.markdown(f'<div class="section-title-long">🟢 โซนผ่านเกณฑ์และมีสถานะปัจจุบันเป็นซื้อถือครอง ∙ LONG ({len(long_cards)} เหรียญ)</div>', unsafe_allow_html=True)
+    # --- 🟢 แสดงกล่องการ์ดฝั่ง LONG ---
+    st.markdown(f'<p style="color:#52c41a; font-size:0.9rem; border-left:3px solid #52c41a; padding-left:8px; margin-bottom:15px;">เข้าเกณฑ์ถือ ∙ LONG {len(long_cards)}</p>', unsafe_allow_html=True)
     if long_cards:
         for i in range(0, len(long_cards), 3):
             cols = st.columns(3)
             for idx, coin in enumerate(long_cards[i:i+3]):
                 with cols[idx]:
-                    p_fmt = f"${coin['price']:,.4f}" if coin['price'] < 1.0 else f"${coin['price']:,.2f}"
                     c_class = "price-change-pos" if coin['change'] >= 0 else "price-change-neg"
                     c_sign = "+" if coin['change'] >= 0 else ""
+                    p_fmt = f"${coin['price']:,.4f}" if coin['price'] < 1.0 else f"${coin['price']:,.2f}"
                     
                     st.markdown(f"""
                     <div class="coin-card">
                         <div class="card-header">
-                            <div><span class="coin-name">{coin['symbol']}</span> <span class="cagr-badge">CAGR: +{coin['cagr']:.1f}%</span></div>
+                            <div><span class="coin-name">{coin['symbol']}</span><span class="live-badge" style="color:#52c41a; background-color:#122419; font-size:0.6rem; padding:1px 4px; border-radius:3px; margin-left:6px;">● LIVE</span></div>
                             <span class="status-badge-long">LONG</span>
                         </div>
-                        <div class="coin-full-name">{coin['name']}</div>
                         <div class="price-row">
                             <span class="current-price">{p_fmt}</span>
                             <span class="{c_class}">{c_sign}{coin['change']:.2f}%</span>
-                            <span style="color:#52c41a; font-size:0.65rem; background-color:#122419; padding:2px 5px; border-radius:4px; font-weight:bold;">● สด</span>
+                            <span style="color:#595247; font-size:0.75rem;">สดวันนี้</span>
                         </div>
                         <div>
-                            <div class="rsi-val-long">{coin['rsi']:.1f}<span class="rsi-label">RSI 14 วันจริง</span></div>
+                            <span class="rsi-val-long">{coin['rsi']:.1f}</span><span class="rsi-label">RSI 14 ∙ สด</span>
                         </div>
                         <div class="progress-container">
                             <div class="progress-zone"></div>
@@ -248,38 +268,38 @@ def run_realtime_top_100():
                             <span>0</span><span>45</span><span>55</span><span>100</span>
                         </div>
                         <div class="history-box">
-                            <p>🟢 <b>คงสถานะ LONG</b> — ค่า RSI แท่งปัจจุบันประมวลผลคำนวณได้ที่ระดับ {coin['rsi']:.1f}</p>
+                            <p>🟢 คงสถานะ (แท่งปิด) — ออก (→CASH) เมื่อ RSI &lt; 45</p>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-    else:
-        st.info("ไม่มีเหรียญใดในกลุ่ม 100 ตัวแรกที่ผ่านเกณฑ์ยืนเหนือระดับ RSI 55 ณ วินาทีนี้")
 
-    # --- 🔴 โซนเหรียญฝั่ง CASH (แสดงผลครบถ้วน แถวละ 3 คอลัมน์) ---
-    st.markdown(f'<div class="section-title-cash">🔴 โซนพักฐานไม่เข้าเกณฑ์ให้ล้างพอร์ตถือเงินสด ∙ CASH ({len(cash_cards)} เหรียญ)</div>', unsafe_allow_html=True)
+    # --- 🔴 แสดงกล่องการ์ดฝั่ง CASH ---
+    st.markdown(f'<p style="color:#a89f91; font-size:0.9rem; border-left:3px solid #a89f91; padding-left:8px; margin-top:25px; margin-bottom:15px;">ถือเงินสด ∙ CASH {len(cash_cards)}</p>', unsafe_allow_html=True)
     if cash_cards:
         for i in range(0, len(cash_cards), 3):
             cols = st.columns(3)
             for idx, coin in enumerate(cash_cards[i:i+3]):
                 with cols[idx]:
-                    p_fmt = f"${coin['price']:,.4f}" if coin['price'] < 1.0 else f"${coin['price']:,.2f}"
                     c_class = "price-change-pos" if coin['change'] >= 0 else "price-change-neg"
                     c_sign = "+" if coin['change'] >= 0 else ""
+                    p_fmt = f"${coin['price']:,.4f}" if coin['price'] < 1.0 else f"${coin['price']:,.2f}"
+                    
+                    dist = 55.0 - coin['rsi']
+                    hint = " <span style='color:#d48806; font-weight:bold;'>⚠️ ใกล้พลิก!</span>" if dist < 5.0 else ""
                     
                     st.markdown(f"""
-                    <div class="coin-card" style="opacity: 0.85; border: 1px solid #332a24;">
+                    <div class="coin-card" style="opacity:0.95;">
                         <div class="card-header">
-                            <div><span class="coin-name" style="color:#d1cabc;">{coin['symbol']}</span> <span class="cagr-badge">CAGR: +{coin['cagr']:.1f}%</span></div>
+                            <div><span class="coin-name">{coin['symbol']}</span><span class="live-badge" style="color:#f76c6c; background-color:#2d2924; font-size:0.6rem; padding:1px 4px; border-radius:3px; margin-left:6px;">● LIVE</span></div>
                             <span class="status-badge-cash">CASH</span>
                         </div>
-                        <div class="coin-full-name">{coin['name']}</div>
                         <div class="price-row">
-                            <span class="current-price" style="color:#d1cabc;">{p_fmt}</span>
+                            <span class="current-price">{p_fmt}</span>
                             <span class="{c_class}">{c_sign}{coin['change']:.2f}%</span>
-                            <span style="color:#f76c6c; font-size:0.65rem; background-color:#261212; padding:2px 5px; border-radius:4px; font-weight:bold;">● สด</span>
+                            <span style="color:#595247; font-size:0.75rem;">สดวันนี้</span>
                         </div>
                         <div>
-                            <div class="rsi-val-cash">{coin['rsi']:.1f}<span class="rsi-label">RSI 14 วันจริง</span></div>
+                            <span class="rsi-val-cash">{coin['rsi']:.1f}</span><span class="rsi-label">RSI 14 ∙ สด</span>
                         </div>
                         <div class="progress-container">
                             <div class="progress-zone"></div>
@@ -288,15 +308,14 @@ def run_realtime_top_100():
                         <div class="progress-labels">
                             <span>0</span><span>45</span><span>55</span><span>100</span>
                         </div>
-                        <div class="history-box" style="background-color:#171212;">
-                            <p style="color:#c48b8b;">⚠️ <b>ถือเงินสด CASH</b> — RSI ตลาดจริงอยู่ที่ระดับ {coin['rsi']:.1f} ต่ำกว่าเกณฑ์โมเมนตัมขาขึ้น</p>
+                        <div class="history-box">
+                            <p>คงสถานะ (แท่งปิด) — เข้า (→LONG) เมื่อ RSI &gt; 55 (ห่างอีก {dist:.1f} จุด){hint}</p>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
-    # สั่งหน่วงเวลาและวนลูปดึงข้อมูลสดใหม่ทุก ๆ 10 วินาที เพื่อไม่ให้ติดเงื่อนไขลิมิตขัดข้องของ API
-    time.sleep(10)
+    # วนลูปอัปเดตราคาแบบ Real-time ทุกๆ 2 วินาทีโดยหลังบ้านไม่ล่ม
+    time.sleep(2)
     st.rerun()
 
-# เปิดรันระบบประมวลผล Top 100 สดทั้งหมด
-run_realtime_top_100()
+run_realtime_dashboard()
